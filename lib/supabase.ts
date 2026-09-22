@@ -1,0 +1,39 @@
+import { createClient } from "@supabase/supabase-js";
+
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+export const supabase =
+  supabaseUrl && supabaseAnonKey
+    ? createClient(supabaseUrl, supabaseAnonKey, {
+        auth: {
+          persistSession: false,
+          autoRefreshToken: false,
+        },
+      })
+    : null;
+
+export type DemoItem = {
+  id: number;
+  name: string;
+  description: string | null;
+  created_at?: string;
+};
+
+export async function getDemoItems(): Promise<DemoItem[]> {
+  if (!supabase) {
+    return [];
+  }
+
+  const { data, error } = await supabase
+    .from("demo_items")
+    .select("id, name, description, created_at")
+    .order("id", { ascending: true });
+
+  if (error) {
+    console.error("Supabase fetch error:", error.message);
+    return [];
+  }
+
+  return (data ?? []) as DemoItem[];
+}
