@@ -13,21 +13,22 @@ export const supabase =
       })
     : null;
 
-export type DemoItem = {
+export type ColorRecord = {
   id: number;
   name: string;
-  description: string | null;
+  hex: string | null;
+  family: string | null;
   created_at?: string;
 };
 
-export async function getDemoItems(): Promise<DemoItem[]> {
+export async function getColorRecords(): Promise<ColorRecord[]> {
   if (!supabase) {
     return [];
   }
 
   const { data, error } = await supabase
-    .from("demo_items")
-    .select("id, name, description, created_at")
+    .from("genai")
+    .select("id, name, hex, family, created_at")
     .order("id", { ascending: true });
 
   if (error) {
@@ -35,5 +36,5 @@ export async function getDemoItems(): Promise<DemoItem[]> {
     return [];
   }
 
-  return (data ?? []) as DemoItem[];
+  return (data ?? []) as ColorRecord[];
 }
