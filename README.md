@@ -1,4 +1,24 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Color Field
+
+Color Field extends the public Supabase color palette with member sign-in, profile completion, avatar uploads, and a server-protected `/members` page.
+
+## Supabase Setup
+
+1. Run [`supabase/setup.sql`](supabase/setup.sql) in the SQL Editor for the existing Supabase project. It creates `public.profiles`, the `auth.users` insert trigger, existing-user profile rows, and the public `avatars` Storage bucket with per-user upload policies. Avatar files are kept in Storage, not the profile table.
+2. Keep RLS disabled on `public.profiles` for this assignment, as permitted by the instructions. Do not put a service-role key in the app.
+3. In Supabase Authentication settings, set the Site URL to your deployed app and allow `http://localhost:3000/auth/callback` plus your deployed app's `/auth/callback` URL. To test Vercel preview deployments, also allow `https://*.vercel.app/auth/callback`.
+4. Create a Google OAuth web client in Google Cloud. Add local and deployed app origins as authorized JavaScript origins. Set its authorized redirect URI to the Supabase callback shown in Supabase's Google provider settings (usually `https://<project-ref>.supabase.co/auth/v1/callback`). Enter that client ID and secret in Supabase Authentication > Providers > Google and enable the provider.
+
+The app uses the exact application callback path `/auth/callback` for Google sign-in and email confirmation. Users without first and last names are sent to profile setup after authentication.
+
+Set these values in `.env.local` and Vercel Project Settings:
+
+```dotenv
+NEXT_PUBLIC_SUPABASE_URL=https://<project-ref>.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=<publishable-or-anon-key>
+```
+
+Before submitting, disable Vercel Deployment Protection so the deployment can be checked in a private browser window. Submit the commit-specific deployment URL from Vercel.
 
 ## Getting Started
 
