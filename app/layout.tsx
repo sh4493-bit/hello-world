@@ -29,9 +29,16 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
-        <SiteHeader />
-        {children}
-      </body>
+  <header className="flex items-center justify-end border-b border-slate-800 bg-slate-950 px-6 py-4">
+    <a
+      href="/login"
+      className="rounded-md bg-cyan-500 px-4 py-2 text-sm font-medium text-slate-950"
+    >
+      Sign in
+    </a>
+  </header>
+  {children}
+</body>
     </html>
   );
 }
