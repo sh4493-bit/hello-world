@@ -13,7 +13,7 @@ export default async function SiteHeader() {
         <span>Color Field</span>
       </Link>
       <nav className="site-nav" aria-label="Main navigation">
-        <Link href="/">Palette</Link>
+        <Link href="/">Caption feed</Link>
         {user ? (
           <>
             <Link href="/members">Members</Link>
