@@ -59,7 +59,8 @@ export async function createCaptionAction(
   }
 
   if (!response.ok) {
-    console.error("Gemini returned an unsuccessful response:", response.status);
+    const errorBody = await response.text().catch(() => "");
+    console.error("Gemini returned an unsuccessful response:", response.status, errorBody.slice(0, 500));
     return { message: "The caption service couldn't make that caption. Please try again.", success: false };
   }
 
