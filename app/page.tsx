@@ -3,7 +3,6 @@ import CaptionForm from "@/app/components/caption-form";
 import CopyButton from "@/app/components/copy-button";
 import VoteControls from "@/app/components/vote-controls";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { getColorRecords } from "@/lib/supabase";
 
 type CaptionGeneration = {
   id: string;
@@ -52,10 +51,7 @@ export default async function Home({
     ? feedQuery.order("up_votes", { ascending: false }).order("created_at", { ascending: false })
     : feedQuery.order("created_at", { ascending: false });
 
-  const [{ data: generations, error: generationsError }, colors] = await Promise.all([
-    feedQuery,
-    getColorRecords(),
-  ]);
+  const { data: generations, error: generationsError } = await feedQuery;
   if (generationsError) console.error("Could not load community captions:", generationsError.message);
 
   const captionItems = (generations ?? []) as CaptionGeneration[];
@@ -191,36 +187,6 @@ export default async function Home({
           </div>
         ) : null}
       </section>
-
-      {colors.length > 0 ? (
-        <section className="palette-archive" aria-labelledby="palette-title">
-          <div className="section-heading">
-            <div>
-              <p className="eyebrow">From the archive / 03</p>
-              <h2 id="palette-title">Colors around town</h2>
-            </div>
-            <p>A little color inspiration from the original Color Field collection.</p>
-          </div>
-          <div className="color-grid">
-            {colors.map((item) => (
-              <article key={item.id} className="color-tile">
-                <div className="color-chip" style={{ backgroundColor: item.hex || "#d8d5ca" }} />
-                <div className="color-details">
-                  <div className="color-name-row">
-                    <h2>{item.name}</h2>
-                    <span>#{item.id}</span>
-                  </div>
-                  <p className="color-family">{item.family || "Unclassified"}</p>
-                  <div className="color-meta">
-                    <span>{item.hex || "No hex value"}</span>
-                    {item.created_at ? <time dateTime={item.created_at}>{new Date(item.created_at).toLocaleDateString()}</time> : null}
-                  </div>
-                </div>
-              </article>
-            ))}
-          </div>
-        </section>
-      ) : null}
     </main>
   );
 }
