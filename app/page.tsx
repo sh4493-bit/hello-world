@@ -1,5 +1,6 @@
 import Link from "next/link";
 import CaptionForm from "@/app/components/caption-form";
+import CopyButton from "@/app/components/copy-button";
 import VoteControls from "@/app/components/vote-controls";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getColorRecords } from "@/lib/supabase";
@@ -9,6 +10,9 @@ type CaptionGeneration = {
   prompt: string;
   caption: string;
   created_at: string;
+  tone: string;
+  up_votes: number;
+  down_votes: number;
 };
 
 type CaptionVote = {
@@ -16,71 +20,64 @@ type CaptionVote = {
   value: "up" | "down";
 };
 
-type CaptionVoteTotal = {
-  generation_id: string;
-  up_votes: number;
-  down_votes: number;
-};
+const SORTS = [
+  { key: "fresh", label: "Fresh" },
+  { key: "top", label: "Top rated" },
+  { key: "mine", label: "My captions" },
+] as const;
 
-export default async function Home() {
+export default async function Home({
+  searchParams,
+}: {
+  searchParams: Promise<{ sort?: string }>;
+}) {
+  const { sort: sortParam } = await searchParams;
+  const sort = SORTS.find((item) => item.key === sortParam)?.key ?? "fresh";
+
   const supabase = await createSupabaseServerClient();
   const { data: { user }, error: authError } = await supabase.auth.getUser();
   if (authError && authError.name !== "AuthSessionMissingError") {
     throw new Error(`Could not verify the current session: ${authError.message}`);
   }
 
+  let feedQuery = supabase
+    .from("caption_feed")
+    .select("id, prompt, caption, created_at, tone, up_votes, down_votes")
+    .limit(40);
+  if (sort === "mine" && user) {
+    const { data: mine } = await supabase.from("caption_generations").select("id").eq("user_id", user.id);
+    feedQuery = feedQuery.in("id", (mine ?? []).map((row) => row.id));
+  }
+  feedQuery = sort === "top"
+    ? feedQuery.order("up_votes", { ascending: false }).order("created_at", { ascending: false })
+    : feedQuery.order("created_at", { ascending: false });
+
   const [{ data: generations, error: generationsError }, colors] = await Promise.all([
-    supabase
-      .from("caption_feed")
-      .select("id, prompt, caption, created_at")
-      .order("created_at", { ascending: false })
-      .limit(40),
+    feedQuery,
     getColorRecords(),
   ]);
   if (generationsError) console.error("Could not load community captions:", generationsError.message);
 
   const captionItems = (generations ?? []) as CaptionGeneration[];
   const generationIds = captionItems.map((item) => item.id);
-  let voteTotals: CaptionVoteTotal[] = [];
   let myVotes: CaptionVote[] = [];
   let voteDataError = Boolean(generationsError);
 
-  if (generationIds.length > 0) {
-    const { data: totals, error: totalsError } = await supabase
-      .from("caption_vote_totals")
-      .select("generation_id, up_votes, down_votes")
+  if (generationIds.length > 0 && user) {
+    const { data: ownVotes, error: ownVotesError } = await supabase
+      .from("caption_votes")
+      .select("generation_id, value")
+      .eq("user_id", user.id)
       .in("generation_id", generationIds);
-    if (totalsError) {
-      console.error("Could not load caption vote totals:", totalsError.message);
+    if (ownVotesError) {
+      console.error("Could not load your caption votes:", ownVotesError.message);
       voteDataError = true;
     } else {
-      voteTotals = (totals ?? []) as CaptionVoteTotal[];
-    }
-
-    if (user) {
-      const { data: ownVotes, error: ownVotesError } = await supabase
-        .from("caption_votes")
-        .select("generation_id, value")
-        .eq("user_id", user.id)
-        .in("generation_id", generationIds);
-      if (ownVotesError) {
-        console.error("Could not load your caption votes:", ownVotesError.message);
-        voteDataError = true;
-      } else {
-        myVotes = (ownVotes ?? []) as CaptionVote[];
-      }
+      myVotes = (ownVotes ?? []) as CaptionVote[];
     }
   }
 
-  const voteSummary = new Map<string, { up: number; down: number; mine?: "up" | "down" }>();
-  for (const total of voteTotals) {
-    voteSummary.set(total.generation_id, { up: total.up_votes, down: total.down_votes });
-  }
-  for (const vote of myVotes) {
-    const summary = voteSummary.get(vote.generation_id) ?? { up: 0, down: 0 };
-    summary.mine = vote.value;
-    voteSummary.set(vote.generation_id, summary);
-  }
+  const myVoteById = new Map(myVotes.map((vote) => [vote.generation_id, vote.value]));
 
   return (
     <main className="community-page">
@@ -131,6 +128,19 @@ export default async function Home() {
           <p>One vote per person, per caption. Keep the line that gets the moment.</p>
         </div>
 
+        <nav className="feed-tabs" aria-label="Sort captions">
+          {SORTS.filter((item) => item.key !== "mine" || user).map((item) => (
+            <Link
+              key={item.key}
+              href={item.key === "fresh" ? "/" : `/?sort=${item.key}`}
+              className={sort === item.key ? "is-active" : undefined}
+              aria-current={sort === item.key ? "page" : undefined}
+            >
+              {item.label}
+            </Link>
+          ))}
+        </nav>
+
         {generationsError ? (
           <div className="data-notice" role="alert">
             The community feed is unavailable right now. Check that the Supabase setup has been applied, then try again.
@@ -144,12 +154,13 @@ export default async function Home() {
 
         {captionItems.length === 0 && !generationsError ? (
           <div className="empty-state">
-            No captions yet. Start the feed with a small detail from your day in the city.
+            {sort === "mine"
+              ? "You haven't made a caption yet. Describe a moment above to get started."
+              : "No captions yet. Start the feed with a small detail from your day in the city."}
           </div>
         ) : captionItems.length > 0 ? (
           <div className="caption-grid">
             {captionItems.map((item, index) => {
-              const summary = voteSummary.get(item.id) ?? { up: 0, down: 0 };
               return (
                 <article className="caption-card" key={item.id}>
                   <div className={`caption-art caption-tone-${index % 4}`} aria-hidden="true">
@@ -157,9 +168,10 @@ export default async function Home() {
                     <span className="caption-mark">“</span>
                   </div>
                   <div className="caption-card-body">
-                    <p className="caption-prompt"><span>THE SCENE</span>{item.prompt}</p>
+                    <p className="caption-prompt"><span>THE SCENE · {item.tone.toUpperCase()}</span>{item.prompt}</p>
                     <blockquote>{item.caption}</blockquote>
                     <div className="caption-card-footer">
+                      <CopyButton text={item.caption} />
                       <time dateTime={item.created_at}>
                         {new Date(item.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
                       </time>
@@ -167,9 +179,9 @@ export default async function Home() {
                         generationId={item.id}
                         isSignedIn={Boolean(user)}
                         isAvailable={!voteDataError}
-                        userVote={summary.mine}
-                        upVotes={summary.up}
-                        downVotes={summary.down}
+                        userVote={myVoteById.get(item.id)}
+                        upVotes={item.up_votes}
+                        downVotes={item.down_votes}
                       />
                     </div>
                   </div>

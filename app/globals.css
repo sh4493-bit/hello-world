@@ -816,3 +816,9 @@ a {
   .caption-grid { grid-template-columns: 1fr; gap: 15px; }
   .caption-art { height: 136px; }
 }
+
+.tone-select { width: 100%; max-width: 220px; padding: 8px 10px; border: 1px solid var(--line, #c9c7bb); border-radius: 6px; background: transparent; font: inherit; }
+.feed-tabs { display: flex; gap: 8px; margin: 0 0 20px; flex-wrap: wrap; }
+.feed-tabs a { padding: 6px 14px; border: 1px solid #c9c7bb; border-radius: 999px; font-size: 12px; text-decoration: none; color: inherit; }
+.feed-tabs a.is-active { background: #1c1c1a; border-color: #1c1c1a; color: #fff; }
+.copy-button { border: 0; background: none; padding: 0; font: inherit; font-size: 11px; color: var(--muted); cursor: pointer; text-decoration: underline; }

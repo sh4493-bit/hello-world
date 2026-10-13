@@ -19,6 +19,13 @@ export default function CaptionForm() {
         placeholder="The 1 train stopped between stations and everyone started rating each other's tote bags..."
         required
       />
+      <label htmlFor="caption-tone">Tone</label>
+      <select id="caption-tone" name="tone" defaultValue="witty" className="tone-select">
+        <option value="witty">Witty</option>
+        <option value="wholesome">Wholesome</option>
+        <option value="deadpan">Deadpan</option>
+        <option value="dramatic">Dramatic</option>
+      </select>
       <div className="caption-form-footer">
         <span>Keep it under 500 characters. Please skip private or identifying details.</span>
         <button className="primary-button" type="submit" disabled={pending}>

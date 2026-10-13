@@ -9,6 +9,15 @@ export type ActionState = {
   success: boolean;
 };
 
+const TONES = {
+  witty: "funny and observant",
+  wholesome: "warm, kind, and heartfelt",
+  deadpan: "dry, understated, and deadpan",
+  dramatic: "over-the-top dramatic, like a movie trailer",
+} as const;
+
+export type Tone = keyof typeof TONES;
+
 export async function createCaptionAction(
   _previousState: ActionState,
   formData: FormData,
@@ -29,6 +38,9 @@ export async function createCaptionAction(
     return { message: "Describe your moment in 8 to 500 characters.", success: false };
   }
 
+  const toneInput = formData.get("tone");
+  const tone: Tone = typeof toneInput === "string" && toneInput in TONES ? (toneInput as Tone) : "witty";
+
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
     return { message: "AI captions aren't configured yet. Add GEMINI_API_KEY to the server environment.", success: false };
@@ -44,7 +56,7 @@ export async function createCaptionAction(
         body: JSON.stringify({
           systemInstruction: {
             parts: [{
-              text: "Write one funny, observant, warm social-media caption for a candid photo from New York City. Keep it under 180 characters. Do not add hashtags, quotation marks, explanations, or claim you saw details not in the user's description.",
+              text: `Write one ${TONES[tone]} social-media caption for a candid photo from New York City. Keep it under 180 characters. Do not add hashtags, quotation marks, explanations, or claim you saw details not in the user's description.`,
             }],
           },
           contents: [{ role: "user", parts: [{ text: prompt.trim() }] }],
@@ -82,6 +94,7 @@ export async function createCaptionAction(
     user_id: user.id,
     prompt: prompt.trim(),
     caption,
+    tone,
   });
   if (insertError) {
     console.error("Could not save generated caption:", insertError.message);
