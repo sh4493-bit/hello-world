@@ -109,14 +109,23 @@ as
 
 grant select on public.caption_vote_totals to anon, authenticated;
 
-alter table public.genai enable row level security;
-revoke insert, update, delete, truncate, references, trigger on table public.genai from anon, authenticated;
-grant select on table public.genai to anon, authenticated;
+do $genai$
+begin
+  if to_regclass('public.genai') is null then
+    raise notice 'public.genai not found; skipping palette policies';
+    return;
+  end if;
 
-drop policy if exists "Palette colors are publicly readable" on public.genai;
-create policy "Palette colors are publicly readable"
-  on public.genai for select to anon, authenticated
-  using (true);
+  alter table public.genai enable row level security;
+  revoke insert, update, delete, truncate, references, trigger on table public.genai from anon, authenticated;
+  grant select on table public.genai to anon, authenticated;
+
+  drop policy if exists "Palette colors are publicly readable" on public.genai;
+  create policy "Palette colors are publicly readable"
+    on public.genai for select to anon, authenticated
+    using (true);
+end
+$genai$;
 
 create or replace function public.create_profile_for_new_user()
 returns trigger
