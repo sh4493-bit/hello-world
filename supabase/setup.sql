@@ -58,16 +58,6 @@ alter table public.caption_generations
   add column if not exists tone text not null default 'witty'
   check (tone in ('witty', 'wholesome', 'deadpan', 'dramatic'));
 
-create or replace view public.caption_feed
-with (security_invoker = false)
-as
-  select
-    g.id, g.prompt, g.caption, g.created_at, g.tone,
-    (select count(*) from public.caption_votes v where v.generation_id = g.id and v.value = 'up') as up_votes,
-    (select count(*) from public.caption_votes v where v.generation_id = g.id and v.value = 'down') as down_votes
-  from public.caption_generations g;
-
-grant select on public.caption_feed to anon, authenticated;
 
 create table if not exists public.caption_votes (
   id uuid primary key default gen_random_uuid(),
@@ -95,6 +85,17 @@ drop policy if exists "Members can cast their own caption votes" on public.capti
 create policy "Members can cast their own caption votes"
   on public.caption_votes for insert to authenticated
   with check (user_id = (select auth.uid()));
+
+create or replace view public.caption_feed
+with (security_invoker = false)
+as
+  select
+    g.id, g.prompt, g.caption, g.created_at, g.tone,
+    (select count(*) from public.caption_votes v where v.generation_id = g.id and v.value = 'up') as up_votes,
+    (select count(*) from public.caption_votes v where v.generation_id = g.id and v.value = 'down') as down_votes
+  from public.caption_generations g;
+
+grant select on public.caption_feed to anon, authenticated;
 
 create or replace view public.caption_vote_totals
 with (security_invoker = false)
