@@ -16,7 +16,8 @@ const TONES = {
   dramatic: "over-the-top dramatic, like a movie trailer",
 } as const;
 
-const GEMINI_MODELS = ["gemini-3.8-flash", "gemini-2.5-flash"];
+const GEMINI_MODEL = "gemini-3.8-flash";
+const GEMINI_RETRY_DELAYS_MS = [1000, 2000, 4000];
 
 export type Tone = keyof typeof TONES;
 
@@ -58,29 +59,38 @@ export async function createCaptionAction(
     generationConfig: { temperature: 0.9, maxOutputTokens: 2048 },
   });
 
-  // Try the primary model, then a fallback, retrying briefly when Gemini is overloaded.
+  // Gemini returns 503/429 during demand spikes, so retry with a growing delay.
   let response: Response | null = null;
-  attempts: for (const model of GEMINI_MODELS) {
-    for (let attempt = 0; attempt < 2; attempt++) {
-      try {
-        response = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(apiKey)}`,
-          { method: "POST", headers: { "Content-Type": "application/json" }, body: requestBody, cache: "no-store" },
-        );
-      } catch (error) {
-        console.error("Gemini request failed:", error);
-        return { message: "The caption service couldn't be reached. Please try again.", success: false };
-      }
-      if (response.ok) break attempts;
-      const errorBody = await response.text().catch(() => "");
-      console.error(`Gemini ${model} returned an unsuccessful response:`, response.status, errorBody.slice(0, 500));
-      if (response.status !== 503 && response.status !== 429) break;
-      await new Promise((resolve) => setTimeout(resolve, 800));
+  for (let attempt = 0; attempt <= GEMINI_RETRY_DELAYS_MS.length; attempt++) {
+    try {
+      response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
+          body: requestBody,
+          cache: "no-store",
+        },
+      );
+    } catch (error) {
+      console.error("Gemini request failed:", error);
+      return { message: "The caption service couldn't be reached. Please try again.", success: false };
     }
+    if (response.ok) break;
+    const errorBody = await response.text().catch(() => "");
+    console.error("Gemini returned an unsuccessful response:", response.status, errorBody.slice(0, 500));
+    if ((response.status !== 503 && response.status !== 429) || attempt === GEMINI_RETRY_DELAYS_MS.length) break;
+    await new Promise((resolve) => setTimeout(resolve, GEMINI_RETRY_DELAYS_MS[attempt]));
   }
 
   if (!response?.ok) {
-    return { message: "The caption service is busy right now. Please try again in a moment.", success: false };
+    const busy = response?.status === 503 || response?.status === 429;
+    return {
+      message: busy
+        ? "Gemini is overloaded right now. Please try again in a minute."
+        : "The caption service couldn't make that caption. Please try again.",
+      success: false,
+    };
   }
 
   let result: unknown;
