@@ -16,6 +16,8 @@ const TONES = {
   dramatic: "over-the-top dramatic, like a movie trailer",
 } as const;
 
+const GEMINI_MODELS = ["gemini-3.8-flash", "gemini-2.5-flash"];
+
 export type Tone = keyof typeof TONES;
 
 export async function createCaptionAction(
@@ -46,34 +48,39 @@ export async function createCaptionAction(
     return { message: "AI captions aren't configured yet. Add GEMINI_API_KEY to the server environment.", success: false };
   }
 
-  let response: Response;
-  try {
-    response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key=${encodeURIComponent(apiKey)}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          systemInstruction: {
-            parts: [{
-              text: `Write one ${TONES[tone]} social-media caption for a candid photo from New York City. Keep it under 180 characters. Do not add hashtags, quotation marks, explanations, or claim you saw details not in the user's description.`,
-            }],
-          },
-          contents: [{ role: "user", parts: [{ text: prompt.trim() }] }],
-          generationConfig: { temperature: 0.9, maxOutputTokens: 2048 },
-        }),
-        cache: "no-store",
-      },
-    );
-  } catch (error) {
-    console.error("Gemini request failed:", error);
-    return { message: "The caption service couldn't be reached. Please try again.", success: false };
+  const requestBody = JSON.stringify({
+    systemInstruction: {
+      parts: [{
+        text: `Write one ${TONES[tone]} social-media caption for a candid photo from New York City. Keep it under 180 characters. Do not add hashtags, quotation marks, explanations, or claim you saw details not in the user's description.`,
+      }],
+    },
+    contents: [{ role: "user", parts: [{ text: prompt.trim() }] }],
+    generationConfig: { temperature: 0.9, maxOutputTokens: 2048 },
+  });
+
+  // Try the primary model, then a fallback, retrying briefly when Gemini is overloaded.
+  let response: Response | null = null;
+  attempts: for (const model of GEMINI_MODELS) {
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        response = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(apiKey)}`,
+          { method: "POST", headers: { "Content-Type": "application/json" }, body: requestBody, cache: "no-store" },
+        );
+      } catch (error) {
+        console.error("Gemini request failed:", error);
+        return { message: "The caption service couldn't be reached. Please try again.", success: false };
+      }
+      if (response.ok) break attempts;
+      const errorBody = await response.text().catch(() => "");
+      console.error(`Gemini ${model} returned an unsuccessful response:`, response.status, errorBody.slice(0, 500));
+      if (response.status !== 503 && response.status !== 429) break;
+      await new Promise((resolve) => setTimeout(resolve, 800));
+    }
   }
 
-  if (!response.ok) {
-    const errorBody = await response.text().catch(() => "");
-    console.error("Gemini returned an unsuccessful response:", response.status, errorBody.slice(0, 500));
-    return { message: "The caption service couldn't make that caption. Please try again.", success: false };
+  if (!response?.ok) {
+    return { message: "The caption service is busy right now. Please try again in a moment.", success: false };
   }
 
   let result: unknown;
